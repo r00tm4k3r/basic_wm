@@ -3,7 +3,7 @@ extern "C"
     #include <X11/Xlib.h>
 }
 #include <memory>
-
+#include <unordered_map>
 class WindowManager 
 {
     public:
@@ -19,6 +19,7 @@ class WindowManager
         const Window _root;
         static bool _wmDetected;
         Display* _display;
+        ::std::unordered_map<Window, Window> _clients;
 
         
         static int OnXError(Display* display, XErrorEvent* e);
@@ -39,5 +40,7 @@ class WindowManager
         void OnMotionNotify(const XMotionEvent& e);
         void OnKeyPress(const XKeyEvent& e);
         void OnKeyRelease(const XKeyEvent& e);
+
+        void Frame(Window w);
 
 };
