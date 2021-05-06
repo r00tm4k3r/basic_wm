@@ -1,9 +1,14 @@
+#ifndef WINDOW_MANAGER_HPP
+#define WINDOW_MANAGER_HPP
+
 extern "C"
 {
     #include <X11/Xlib.h>
+    #include <X11/Xutil.h>
 }
 #include <memory>
 #include <unordered_map>
+
 class WindowManager 
 {
     public:
@@ -35,12 +40,16 @@ class WindowManager
         void OnConfigureNotify(const XConfigureEvent& e);
         void OnMapRequest(const XMapRequestEvent& e);
         void OnConfigureRequest(const XConfigureRequestEvent& e);
+
         void OnButtonPress(const XButtonEvent& e);
         void OnButtonRelease(const XButtonEvent& e);
         void OnMotionNotify(const XMotionEvent& e);
         void OnKeyPress(const XKeyEvent& e);
         void OnKeyRelease(const XKeyEvent& e);
 
-        void Frame(Window w);
+        void Frame(Window w, bool createdBeforeWindowManager);
+        void Unframe(Window w);
 
 };
+
+#endif

@@ -8,7 +8,7 @@ int main(int argc, char** argv)
 {
     ::google::InitGoogleLogging(argv[0]);
 
-    unique_ptr<WindowManager> windowManager(WindowManager::Create());
+    unique_ptr<WindowManager> windowManager = WindowManager::Create();
 
     if(!windowManager)
     {

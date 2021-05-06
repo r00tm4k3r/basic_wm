@@ -2,6 +2,9 @@
 #include <glog/logging.h>
 
 using ::std::unique_ptr;
+
+bool WindowManager::_wmDetected;
+
 unique_ptr<WindowManager> WindowManager::Create()
 {
     Display* display = XOpenDisplay(nullptr);
@@ -14,8 +17,8 @@ unique_ptr<WindowManager> WindowManager::Create()
 }
 
 WindowManager::WindowManager(Display* d) :
-    _display(CHECK_NOTNULL(d)),
-    _root(DefaultRootWindow(_display))
+    _root(DefaultRootWindow(_display)),
+    _display(CHECK_NOTNULL(d))
 {
 }
 
@@ -39,6 +42,27 @@ void WindowManager::Run()
     }
     XSetErrorHandler(&WindowManager::OnXError);
 
+    XGrabServer(_display);
+    Window returnedRoot, returnedParent;
+    Window* topLvlWindows;
+    unsigned int numTopLvlWindows;
+    
+    CHECK(XQueryTree(
+        _display,
+        _root,
+        &returnedRoot,
+        &returnedParent,
+        &topLvlWindows,
+        &numTopLvlWindows
+    ));
+    CHECK_EQ(returnedRoot, _root);
+    
+    for (unsigned int i = 0; i < numTopLvlWindows; i++)
+    {
+        XFree(topLvlWindows);
+        XUngrabServer(_display);
+    }
+
     //Main event loop
 
     for(;;)
@@ -46,7 +70,6 @@ void WindowManager::Run()
         XEvent e;
         XNextEvent(_display, &e);
         //LOG(INFO) << "Received event: " << ToString(e);
-
 
         //dispatch event
         switch(e.type)
@@ -141,11 +164,42 @@ void WindowManager::OnConfigureNotify (const XConfigureEvent& e) {}
 
 void WindowManager::OnMapRequest(const XMapRequestEvent& e)
 {
-    Frame(e.window);
+    Frame(e.window,false);
     XMapWindow(_display, e.window);
 }
 
-void WindowManager::Frame(Window w)
+void WindowManager::OnReparentNotify (const XReparentEvent &e) {}
+
+void WindowManager::OnMapNotify(const XMapEvent& e) {}
+
+void WindowManager::OnUnmapNotify(const XUnmapEvent& e)
+{
+    if(_clients.count(e.window))
+    {
+        LOG(INFO) << "Ignore UnmapNotify for non-client window" << e.window;
+        return;
+    }
+
+    if(e.event == _root)
+    {
+        LOG(INFO) << "Ignore UnmapNotify for reparented preexisting window" << e.window;
+        return;
+    }
+
+    Unframe(e.window);
+}
+
+void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& e)
+{}
+
+void WindowManager::OnKeyPress(const XKeyEvent& e){}
+void WindowManager::OnKeyRelease(const XKeyEvent& e){}
+
+void WindowManager::OnButtonPress(const XButtonEvent& e){}
+void WindowManager::OnButtonRelease(const XButtonEvent& e){}
+void WindowManager::OnMotionNotify(const XMotionEvent& e){}
+
+void WindowManager::Frame(Window w, bool createdBeforeWindowManager)
 {
     // Visual frame properties
     const unsigned int BORDER_WIDTH = 3;
@@ -159,6 +213,7 @@ void WindowManager::Frame(Window w)
     CHECK(XGetWindowAttributes(_display, w, &xWinAttr));
 
     //see framing existing top-level windows
+    if(createdBeforeWindowManager && (xWinAttr.override_redirect || xWinAttr.map_state != IsViewable)) return;
 
     //create frame
     const Window frame = XCreateSimpleWindow(
@@ -212,29 +267,19 @@ void WindowManager::Frame(Window w)
       GrabModeAsync,
       None,
       None);
-  //   c. Kill windows with alt + f4.
-  XGrabKey(
-      _display,
-      XKeysymToKeycode(_display, XK_F4),
-      Mod1Mask,
-      w,
-      false,
-      GrabModeAsync,
-      GrabModeAsync);
-  //   d. Switch windows with alt + tab.
-  XGrabKey(
-      _display,
-      XKeysymToKeycode(_display, XK_Tab),
-      Mod1Mask,
-      w,
-      false,
-      GrabModeAsync,
-      GrabModeAsync);
 
       LOG(INFO) << "Framed window " << w << " [" << frame << "]";
 }
 
+void WindowManager::Unframe(Window w)
+{
+    const Window frame = _clients[w];
+    XUnmapWindow(_display, frame);
+    XReparentWindow(_display, w, _root, 0 ,0);
 
-void WindowManager::OnReparentNotify (const XReparentEvent &e) {}
+    XRemoveFromSaveSet(_display, w);
+    XDestroyWindow(_display, frame);
+    _clients.erase(w);
 
-void WindowManager::OnMapNotify(const XMapEvent& e) {}
+    LOG(INFO) << "Unframed window" << w << "[" << frame << "]";
+}
