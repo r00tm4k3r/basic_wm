@@ -1,6 +1,6 @@
 #include <cstdlib>
 #include <glog/logging.h>
-#include "window_manager/window_manager.hpp"
+#include "window_manager.hpp"
 
 using ::std::unique_ptr;
 
